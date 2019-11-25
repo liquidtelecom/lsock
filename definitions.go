@@ -20,6 +20,8 @@ const (
 	NEW_SOCKET byte = iota +1
 	CLOSE_SOCKET
 	RECONNECT_SOCKET
+	REGISTER_SOCKET
+	RETRIEVE_SOCKETS
 )
 
 // Control types when passing data
@@ -44,6 +46,7 @@ type Lsock struct {
     Mutex *sync.Mutex
     Stats *SockStats
     State bool
+	IsInbound bool
 }
 
 type SockStats struct {
@@ -67,5 +70,11 @@ type ControlMsg struct {
 type DataMsg struct {
 	Data []byte
 	ControlType byte
+}
+
+type TrackControl struct {
+	Action byte
+	SockStruct *Lsock
+	RetrievalChannel chan []*Lsock
 }
 
