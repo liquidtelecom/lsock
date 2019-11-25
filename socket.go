@@ -15,6 +15,8 @@ RetryCount is the number of times it will attempt to reconnect before failing en
 Tracker Channel is the previously referred to TrackControl channel used to register sockets with the socket tracker
 
 To listen on a socket call NewListener() and ensure you pass it a tracker control channel for socket registration
+Note: The NewListener() doesnt curently have a way to close off the packet receiver - may be worth enforcing having the
+packet reciever use an additional boolean channel for control which is stored in the Lsock struct so we can handle this.
 */
 
 package lsock
@@ -27,6 +29,7 @@ import (
 	"io"
 	"strings"
 	"strconv"
+	"reflect"
 )
 
 // Forms a new connection and returns an LSock structure complete with attached statistics structure
@@ -55,7 +58,7 @@ func NewConnection(Peer string, Port uint16, Timeout uint16, Output chan []byte,
 }
 
 // Listens for new connections and fires our reader and timeout watchdogs correctly
-func NewListener(LocalAddress, Port uint16, Timeout uint16, Output chan []byte, RegisterChannel chan *TrackControl) {
+func NewListener(LocalAddress string, Port uint16, Timeout uint16, ReceiverFunction interface{}, ProcessorChannel chan []byte, RegisterChannel chan *TrackControl) {
 	var RetryCount int = 0
 	var listener net.Listener
 	var err error
@@ -89,15 +92,22 @@ func NewListener(LocalAddress, Port uint16, Timeout uint16, Output chan []byte, 
 			Mutex: &sync.Mutex{},
 			Control: make(chan *ControlMsg),
 			Stats: &SockStats{},
-			Output: Output,
+			Output: make(chan []byte),
 			ReadControl: make(chan byte),
 			WriteChannel: make(chan *DataMsg),
+			IsInbound: true,
 			Socket: socket,
 		}
 		go NewSocket.Reader()
 		go NewSocket.Writer()
 		go NewSocket.TimeoutWatchdog()
 		go ConnectionHandler(NewSocket.Control, RegisterChannel)
+		var Arguments []reflect.Value = []reflect.Value{
+			reflect.ValueOf(NewSocket.Output),
+			reflect.ValueOf(ProcessorChannel),
+		}
+		DebugLog("Spawning packet receiver...")
+		go reflect.ValueOf(ReceiverFunction).Call(Arguments)
 		RegisterChannel <- &TrackControl{REGISTER_SOCKET, NewSocket, nil}
 	}
 }
@@ -193,7 +203,7 @@ func ReconnectSocket(s *Lsock) {
 // Our socket reader function
 func (s *Lsock) Reader() {
 	var InputBuffer bytes.Buffer
-	var ByteBuffer *[]byte
+	var ByteBuffer []byte
 
 	for {
 		select {
@@ -217,11 +227,14 @@ func (s *Lsock) Reader() {
 						s.Control <- &ControlMsg{s, CLOSE_SOCKET}
 					}
 				}
-				ByteBuffer = new([]byte)
-				copy(*ByteBuffer, InputBuffer.Bytes())
+				ByteBuffer = make([]byte, InputBuffer.Len())
+				copy(ByteBuffer, InputBuffer.Bytes())
+				DebugLog(fmt.Sprintf("Received %d bytes of data from %s:%d",InputBuffer.Len(), s.Peer, s.Port))
 				s.Stats.Read += PACKET_BUFFER_SIZE
 				s.Stats.LastRead = time.Now()
-				s.Output <- *ByteBuffer
+				DebugLog(fmt.Sprintf("Outputting %d bytes of data data from %s:%d to output channel...", len(ByteBuffer), s.Peer, s.Port))
+				s.Output <- ByteBuffer
+				DebugLog(fmt.Sprintf("Completed data output for data from %s:%d", s.Peer, s.Port))
 				InputBuffer.Reset()
 		}
 	}
@@ -233,12 +246,12 @@ func (s *Lsock) Writer() {
 	for {
 		select {
 			case WriteMsg := <-s.WriteChannel:
-				DebugLog(fmt.Sprintf("Got an inbound message on the write channel for %s:%d...\n",s.Peer,s.Port))
 				switch WriteMsg.ControlType {
 					case SOCKET_CLOSED:
 						DebugLog(fmt.Sprintf("Socket %s:%d closed by request, closing writer routine...\n", s.Peer, s.Port))
 						return
 					case NEW_DATA:
+						DebugLog(fmt.Sprintf("Writing new data to socket...\n", s.Peer, s.Port))
 						s.Socket.Write(WriteMsg.Data)
 						s.Stats.Wrote += uint64(len(WriteMsg.Data))
 						s.Stats.LastWrote = time.Now()
@@ -258,10 +271,15 @@ func (s *Lsock) TimeoutWatchdog() {
 				return
 			default:
 				if uint16(time.Since(s.Stats.LastRead).Seconds()) > s.Timeout {
-					s.Stats.LastRead = time.Now()
-					DebugLog(fmt.Sprintf("Timeout elapsed reading from %s:%d, closing socket and scheduling reconnect", s.Peer, s.Port))
-					s.Control <- &ControlMsg{s, RECONNECT_SOCKET}
-					DebugLog(fmt.Sprintf("Sent reconnection request for %s:%d...", s.Peer, s.Port))
+					if s.IsInbound {
+						DebugLog(fmt.Sprintf("Inbound connection timeout for %s:%d... closing the socket",s.Peer,s.Port))
+						s.Control <- &ControlMsg{s, CLOSE_SOCKET}
+					} else {
+						s.Stats.LastRead = time.Now()
+						DebugLog(fmt.Sprintf("Timeout elapsed reading from %s:%d, closing socket and scheduling reconnect", s.Peer, s.Port))
+						s.Control <- &ControlMsg{s, RECONNECT_SOCKET}
+						DebugLog(fmt.Sprintf("Sent reconnection request for %s:%d...", s.Peer, s.Port))
+					}
 				} else {
 					time.Sleep(time.Duration(200) * time.Millisecond)
 				}

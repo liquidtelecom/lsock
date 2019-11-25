@@ -12,7 +12,7 @@ import (
     "time"
 )
 
-const PACKET_BUFFER_SIZE = 19
+const PACKET_BUFFER_SIZE = 1
 
 // Socket actions
 const (
