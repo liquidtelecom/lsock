@@ -31,6 +31,9 @@ const (
 	SOCKET_CLOSED
 )
 
+// This is our structure for sockets, and contains various channels for control, the socket itself
+// and several other useful pieces.  Additional session based data can be stored in in the Supplementary
+// interface for passing to third party packet processing routines
 type Lsock struct {
     Peer string
     Port uint16
@@ -47,6 +50,7 @@ type Lsock struct {
     Stats *SockStats
     State bool
 	IsInbound bool
+	Supplementary interface{}
 }
 
 type SockStats struct {

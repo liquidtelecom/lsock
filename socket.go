@@ -104,6 +104,7 @@ func NewListener(LocalAddress string, Port uint16, Timeout uint16, ReceiverFunct
 		go ConnectionHandler(NewSocket.Control, RegisterChannel)
 		var Arguments []reflect.Value = []reflect.Value{
 			reflect.ValueOf(NewSocket.Output),
+			reflect.ValueOf(NewSocket),
 			reflect.ValueOf(ProcessorChannel),
 		}
 		DebugLog("Spawning packet receiver...")
