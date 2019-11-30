@@ -67,7 +67,7 @@ type SockStats struct {
 }
 
 type ControlMsg struct {
-    sock *Lsock
+    Sock *Lsock
     Action byte
 }
 
