@@ -144,49 +144,49 @@ func ConnectionHandler(in chan *ControlMsg, Tracker chan *TrackControl) {
 			case input :=<-in:
 				switch input.Action {
 					case NEW_SOCKET:
-						DebugLog(fmt.Sprintf("Got new connection request for %s:%d...",input.sock.Peer, input.sock.Port))
-						if input.sock.Socket, err = net.Dial("tcp", fmt.Sprintf("%s:%d", input.sock.Peer,  input.sock.Port)); err != nil {
+						DebugLog(fmt.Sprintf("Got new connection request for %s:%d...",input.Sock.Peer, input.Sock.Port))
+						if input.Sock.Socket, err = net.Dial("tcp", fmt.Sprintf("%s:%d", input.Sock.Peer,  input.Sock.Port)); err != nil {
 							// if RetryCount is 0 - keep retrying endlessly
-							if input.sock.Stats.CurrentRetries >= input.sock.RetryCount && input.sock.RetryCount != 0 {
+							if input.Sock.Stats.CurrentRetries >= input.Sock.RetryCount && input.Sock.RetryCount != 0 {
 								DebugLog("Connection retry socket count exceeded")
 								return
 							} else {
 								DebugLog("Failed to connect to %s:%d, scheduling retry...\n")
-								input.sock.Stats.CurrentRetries++
-								go ReconnectSocket(input.sock)
+								input.Sock.Stats.CurrentRetries++
+								go ReconnectSocket(input.Sock)
 							}
 						} else {
-							input.sock.Stats.CurrentRetries = 0
-							input.sock.Stats.Reconnects++
-							input.sock.Stats.LastReconnect = time.Now()
-							input.sock.Stats.LastRead = time.Now()
-							DebugLog(fmt.Sprintf("Got socket connection to %s:%d, starting reader and time out functions", input.sock.Peer, input.sock.Port))
-							go input.sock.Reader()
-							go input.sock.Writer()
-							go input.sock.TimeoutWatchdog()
-							Tracker <- &TrackControl{REGISTER_SOCKET, input.sock, nil}
-							DebugLog(fmt.Sprintf("Spawned relevant routines for %s:%d...", input.sock.Peer, input.sock.Port))
+							input.Sock.Stats.CurrentRetries = 0
+							input.Sock.Stats.Reconnects++
+							input.Sock.Stats.LastReconnect = time.Now()
+							input.Sock.Stats.LastRead = time.Now()
+							DebugLog(fmt.Sprintf("Got socket connection to %s:%d, starting reader and time out functions", input.Sock.Peer, input.Sock.Port))
+							go input.Sock.Reader()
+							go input.Sock.Writer()
+							go input.Sock.TimeoutWatchdog()
+							Tracker <- &TrackControl{REGISTER_SOCKET, input.Sock, nil}
+							DebugLog(fmt.Sprintf("Spawned relevant routines for %s:%d...", input.Sock.Peer, input.Sock.Port))
 						}
 					case RECONNECT_SOCKET:
-						DebugLog(fmt.Sprintf("Got socket reconnection request for %s:%d, resetting TCP session", input.sock.Peer, input.sock.Port))
-						DebugLog(fmt.Sprintf("Stopping read routine for %s:%d...",input.sock.Peer, input.sock.Port))
-						input.sock.ReadControl <- SOCKET_CLOSED
-						DebugLog(fmt.Sprintf("Stopping write routine for %s:%d...",input.sock.Peer, input.sock.Port))
-						input.sock.WriteChannel <- &DataMsg{ControlType: SOCKET_CLOSED}
-						DebugLog(fmt.Sprintf("Stopping timeout watchdog routine for %s:%d...",input.sock.Peer, input.sock.Port))
-						input.sock.TimeoutControl <- true
-						DebugLog(fmt.Sprintf("Closing socket for %s:%d...",input.sock.Peer, input.sock.Port))
-						input.sock.Mutex.Lock()
-						Tracker <- &TrackControl{CLOSE_SOCKET, input.sock, nil}
-						input.sock.Socket.Close()
-						go ReconnectSocket(input.sock)
+						DebugLog(fmt.Sprintf("Got socket reconnection request for %s:%d, resetting TCP session", input.Sock.Peer, input.Sock.Port))
+						DebugLog(fmt.Sprintf("Stopping read routine for %s:%d...",input.Sock.Peer, input.Sock.Port))
+						input.Sock.ReadControl <- SOCKET_CLOSED
+						DebugLog(fmt.Sprintf("Stopping write routine for %s:%d...",input.Sock.Peer, input.Sock.Port))
+						input.Sock.WriteChannel <- &DataMsg{ControlType: SOCKET_CLOSED}
+						DebugLog(fmt.Sprintf("Stopping timeout watchdog routine for %s:%d...",input.Sock.Peer, input.Sock.Port))
+						input.Sock.TimeoutControl <- true
+						DebugLog(fmt.Sprintf("Closing socket for %s:%d...",input.Sock.Peer, input.Sock.Port))
+						input.Sock.Mutex.Lock()
+						Tracker <- &TrackControl{CLOSE_SOCKET, input.Sock, nil}
+						input.Sock.Socket.Close()
+						go ReconnectSocket(input.Sock)
 					case CLOSE_SOCKET:
-						input.sock.ReadControl <- SOCKET_CLOSED
-						input.sock.WriteChannel <- &DataMsg{ControlType: SOCKET_CLOSED}
-						input.sock.TimeoutControl <- true
-						input.sock.Mutex.Lock()
-						Tracker <- &TrackControl{CLOSE_SOCKET, input.sock, nil}
-						input.sock.Socket.Close()
+						input.Sock.ReadControl <- SOCKET_CLOSED
+						input.Sock.WriteChannel <- &DataMsg{ControlType: SOCKET_CLOSED}
+						input.Sock.TimeoutControl <- true
+						input.Sock.Mutex.Lock()
+						Tracker <- &TrackControl{CLOSE_SOCKET, input.Sock, nil}
+						input.Sock.Socket.Close()
 				}
 		}
 	}
