@@ -84,6 +84,7 @@ func NewListener(LocalAddress string, Port uint16, Timeout uint16, ReceiverFunct
 		RemoteAddr := strings.Split(socket.RemoteAddr().String(), ":")
 		Port,_ := strconv.Atoi(RemoteAddr[1])
 		DebugLog(fmt.Sprintf("Got new connection from %s",socket.RemoteAddr().String()))
+		ProcessorChannel = make(chan []byte)
 		NewSocket := &Lsock{
 			Peer: RemoteAddr[0],
 			Port: uint16(Port),
